@@ -1,0 +1,145 @@
+create or replace table "EXP_DM"."ADRIAN_EXP"."RANK_OVER_PARTITION" (farmer_id integer, state varchar, bushels float);
+insert into "EXP_DM"."ADRIAN_EXP"."RANK_OVER_PARTITION"  (farmer_id, state, bushels) values
+    (1, 'Iowa', 100),
+    (2, 'Iowa', 110),
+    (3, 'Iowa', NULL),
+    (4, 'Iowa', 160),
+    (5, 'Kansas', 120),
+    (6, 'Kansas', 130);
+
+select * from "EXP_DM"."ADRIAN_EXP"."RANK_OVER_PARTITION";
+
+select state, bushels,
+        rank() over (order by bushels asc) as rank,
+        dense_rank() over (order by bushels asc) as dense_rank,
+        row_number() over (order by bushels) as row_number,
+        rank() over (partition by state order by bushels asc) as rank_partition,
+        dense_rank() over (partition by state order by bushels asc) as dense_rank_partition,
+        row_number() over (partition by state order by bushels asc) as row_number_partition
+from "EXP_DM"."ADRIAN_EXP"."RANK_OVER_PARTITION";
+
+
++--------+---------+-------------------------------------+-------------------------------------------+
+| STATE  | BUSHELS | RANK() OVER (ORDER BY BUSHELS DESC) | DENSE_RANK() OVER (ORDER BY BUSHELS DESC) |
+|--------+---------+-------------------------------------+-------------------------------------------|
+| Kansas |     130 |                                   1 |                                         1 |
+| Kansas |     120 |                                   2 |                                         2 |
+| Iowa   |     110 |                                   3 |                                         3 |
+| Iowa   |     100 |                                   4 |                                         4 |
++--------+---------+-------------------------------------+-------------------------------------------+;
+
+
+create or replace table "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG" (emp_id integer, year integer, revenue int);
+insert into "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG"  values (0, 2010, 1000), (0, 2011, 1500), (0, 2012, 500), (0, 2013, NULL);
+insert into "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG"  values (1, 2010, 10000), (1, 2011, 12500), (1, 2012, 15000), (1, 2013, 20000);
+insert into "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG"  values (2, 2012, 500), (2, 2013, 800);
+
+select * from "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG";
+
+select * from (
+select 
+emp_id,
+year,
+revenue,
+lead(revenue,1,0) IGNORE NULLS over (partition by EMP_ID order by year asc) as lead_1,
+lead(revenue,2,0) IGNORE NULLS over (partition by EMP_ID order by year asc) as lead_2,
+lag(revenue,1,0) IGNORE NULLS over (partition by EMP_ID order by revenue asc) as lag_1
+from "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG"
+)
+order by emp_id;
+
+select emp_id, year, revenue, lead(revenue) over (partition by emp_id order by year) - revenue as diff_to_next from "EXP_DM"."ADRIAN_EXP"."LEAD_AND_LAG"  order by emp_id, year;
+
++--------+------+----------+--------------+
+| EMP_ID | YEAR |  REVENUE | DIFF_TO_NEXT |
+|--------+------+----------+--------------|
+|      0 | 2010 |  1000.00 |       500.00 |
+|      0 | 2011 |  1500.00 |     -1000.00 |
+|      0 | 2012 |   500.00 |       250.00 |
+|      0 | 2013 |   750.00 |         NULL |
+|      1 | 2010 | 10000.00 |      2500.00 |
+|      1 | 2011 | 12500.00 |      2500.00 |
+|      1 | 2012 | 15000.00 |      5000.00 |
+|      1 | 2013 | 20000.00 |         NULL |
+|      2 | 2012 |   500.00 |       300.00 |
+|      2 | 2013 |   800.00 |         NULL |
++--------+------+----------+--------------+
+
+
+
+
+
+--------------------------------------
+
+/*
+
+Table: Stadium
+
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| id            | int     |
+| visit_date    | date    |
+| people        | int     |
++---------------+---------+
+visit_date is the primary key for this table.
+Each row of this table contains the visit date and visit id to the stadium with the number of people during the visit.
+No two rows will have the same visit_date, and as the id increases, the dates increase as well.
+ 
+
+Write an SQL query to display the records with three or more rows with consecutive id's, and the number of people is greater than or equal to 100 for each.
+
+Return the result table ordered by visit_date in ascending order.
+
+The query result format is in the following example.
+
+ 
+
+Stadium table:
++------+------------+-----------+
+| id   | visit_date | people    |
++------+------------+-----------+
+| 1    | 2017-01-01 | 10        |
+| 2    | 2017-01-02 | 109       |
+| 3    | 2017-01-03 | 150       |
+| 4    | 2017-01-04 | 99        |
+| 5    | 2017-01-05 | 145       |
+| 6    | 2017-01-06 | 1455      |
+| 7    | 2017-01-07 | 199       |
+| 8    | 2017-01-09 | 188       |
++------+------------+-----------+
+
+Result table:
++------+------------+-----------+
+| id   | visit_date | people    |
++------+------------+-----------+
+| 5    | 2017-01-05 | 145       |
+| 6    | 2017-01-06 | 1455      |
+| 7    | 2017-01-07 | 199       |
+| 8    | 2017-01-09 | 188       |
++------+------------+-----------+
+The four rows with ids 5, 6, 7, and 8 have consecutive ids and each of them has >= 100 people attended. Note that row 8 was included even though the visit_date was not the next day after row 7.
+The rows with ids 2 and 3 are not included because we need at least three consecutive ids.
+*/
+
+
+
+
+with ranks as (
+select
+*,
+people >= 100 as current,
+lead(people,1,0) over (order by id asc) >= 100 as lead_1,
+lead(people,2,0) over (order by id asc) >= 100 as lead_2,
+lag(people,1,0) over (order by id asc) >= 100 as lag_1,
+lag(people,2,0) over (order by id asc) >= 100 as lag_2
+from 
+stadium)
+
+select id, visit_date, people from ranks 
+where 
+(lag_1 = current and lag_2 = current and current = TRUE )
+OR (lag_1 = current and lead_1 = current and current = TRUE )
+OR (lead_1 = current and lead_2 = current and current = TRUE )
+order by visit_date asc
+
